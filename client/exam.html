@@ -33,7 +33,7 @@
 
     <script>
         (async () => {
-            let socket = new WebSocket('ws://' + window.location.host);
+            let socket = new WebSocket('wss://' + window.location.host);
             let currentToken = localStorage.getItem('authToken') || '';
 
             const loginSection = document.getElementById('login-section');
@@ -124,7 +124,7 @@
             socket.onclose = () => {
                 console.log('exam.js: WebSocket closed, attempting reconnect in 5s');
                 setTimeout(() => {
-                    socket = new WebSocket('ws://' + window.location.host);
+                    socket = new WebSocket('wss://' + window.location.host);
                     socket.onopen = () => {
                         console.log('exam.js: WebSocket reconnected');
                         if (currentToken) {
