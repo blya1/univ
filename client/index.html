@@ -23,7 +23,7 @@
         let socket;
 
         function initializeWebSocket() {
-            socket = new WebSocket('ws://univ-8ebo.onrender.com');
+            socket = new WebSocket('wss://univ-8ebo.onrender.com');
             socket.onopen = () => {
                 console.log('index.html: WebSocket connected');
                 socket.send(JSON.stringify({ role: 'exam' }));
