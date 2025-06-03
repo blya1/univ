@@ -1,0 +1,247 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Roboto', sans-serif;
+    min-height: 100vh;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    background: #121212;
+    color: #d0d0d0;
+    transition: background 0.3s, color 0.3s;
+}
+
+.container {
+    max-width: 1200px;
+    width: 90%;
+    border-radius: 8px;
+    padding: 24px;
+    background: #1a1a1a;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    animation: fadeIn 0.4s ease-out;
+    margin: 0 auto;
+}
+
+h2 {
+    text-align: center;
+    margin-bottom: 24px;
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: #ffffff;
+}
+
+h3 {
+    font-size: 1rem;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: #ffffff;
+}
+
+#login-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+#login-section input {
+    padding: 12px;
+    border: 1px solid #333333;
+    border-radius: 6px;
+    font-size: 1rem;
+    outline: none;
+    background: #2a2a2a;
+    color: #d0d0d0;
+    transition: border 0.3s, background 0.3s;
+}
+
+#login-section input:focus {
+    border: 1px solid #808080;
+}
+
+#login-section button {
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    background: #404040;
+    color: #ffffff;
+    transition: background 0.3s, transform 0.2s;
+}
+
+#login-section button:hover {
+    background: #505050;
+    transform: translateY(-2px);
+}
+
+#auth-message {
+    text-align: center;
+    font-size: 0.875rem;
+    margin-top: 12px;
+    color: #a0a0a0;
+}
+
+#auth-check {
+    text-align: center;
+}
+
+#auth-check a {
+    text-decoration: none;
+    color: #d0d0d0;
+    transition: color 0.3s;
+}
+
+#auth-check a:hover {
+    color: #ffffff;
+}
+
+#clients {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.client-section {
+    border-radius: 6px;
+    padding: 16px;
+    background: #222222;
+    transition: background 0.3s;
+}
+
+.client-header button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 400;
+    cursor: pointer;
+    background: #2a2a2a;
+    color: #d0d0d0;
+    text-align: left;
+    transition: background 0.3s;
+}
+
+.client-header button:hover {
+    background: #333333;
+}
+
+.questions {
+    display: none;
+    margin-top: 12px;
+}
+
+.question {
+    border-radius: 6px;
+    padding: 12px;
+    margin-top: 8px;
+    background: #1a1a1a;
+}
+
+.question img {
+    max-width: 100%;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.answer-input {
+    display: flex;
+    gap: 8px;
+}
+
+.answer-input input[type="text"] {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #333333;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    outline: none;
+    background: #2a2a2a;
+    color: #d0d0d0;
+    transition: border 0.3s;
+}
+
+.answer-input input[type="text"]:focus {
+    border: 1px solid #808080;
+}
+
+.answer-input button {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    background: #404040;
+    color: #ffffff;
+    transition: background 0.3s, transform 0.2s;
+}
+
+.answer-input button:hover {
+    background: #505050;
+    transform: translateY(-2px);
+}
+
+#disconnected-message {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    background: #ff4444;
+    color: #ffffff;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    z-index: 1000;
+    display: none;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 600px) {
+    .container {
+        padding: 16px;
+        width: 95%;
+    }
+
+    h2 {
+        font-size: 1.25rem;
+    }
+
+    #login-section input,
+    #login-section button {
+        font-size: 0.875rem;
+    }
+
+    .client-header button {
+        font-size: 0.875rem;
+    }
+
+    .answer-input {
+        flex-direction: column;
+    }
+
+    .answer-input button {
+        width: 100%;
+    }
+}

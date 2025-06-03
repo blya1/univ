@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Помощник для экзамена</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <div id="login-section">
+            <h2>Требуется авторизация</h2>
+            <p>Пожалуйста, войдите для доступа к помощнику.</p>
+            <input type="text" id="username" placeholder="Имя пользователя">
+            <input type="password" id="password" placeholder="Пароль">
+            <button id="login-btn">Войти</button>
+            <p id="auth-message"></p>
+        </div>
+
+        <div id="exam-section" style="display: none;">
+            <h2>Помощник для экзамена</h2>
+            <div id="clients"></div>
+        </div>
+
+        <div id="auth-check" style="display: none;">
+            <p>У вас уже есть доступ. <a href="#" id="logout-btn">Выйти</a></p>
+        </div>
+    </div>
+
+    <div id="disconnected-message">Пользователь отключился</div>
+
+    <script>
+        (async () => {
+            let socket = new WebSocket('ws://' + window.location.host);
+            let currentToken = localStorage.getItem('authToken') || '';
+
+            const loginSection = document.getElementById('login-section');
+            const examSection = document.getElementById('exam-section');
+            const authCheck = document.getElementById('auth-check');
+            const loginBtn = document.getElementById('login-btn');
+            const usernameInput = document.getElementById('username');
+            const passwordInput = document.getElementById('password');
+            const authMessage = document.getElementById('auth-message');
+            const logoutBtn = document.getElementById('logout-btn');
+            const disconnectedMessage = document.getElementById('disconnected-message');
+
+            // Проверка токена при загрузке
+            if (currentToken) {
+                socket.onopen = () => {
+                    socket.send(JSON.stringify({ type: 'verifyToken', token: currentToken }));
+                };
+            }
+
+            socket.onopen = () => {
+                console.log('exam.js: WebSocket connected');
+                if (!currentToken) {
+                    socket.send(JSON.stringify({ role: 'exam' }));
+                }
+            };
+
+            socket.onmessage = async (event) => {
+                try {
+                    const response = JSON.parse(event.data);
+                    console.log('exam.js: Received:', response);
+
+                    if (response.type === 'loginResponse') {
+                        if (response.success) {
+                            localStorage.setItem('authToken', response.token);
+                            currentToken = response.token;
+                            loginSection.style.display = 'none';
+                            examSection.style.display = 'block';
+                            authCheck.style.display = 'block';
+                            socket.send(JSON.stringify({ role: 'exam' }));
+                        } else {
+                            authMessage.textContent = 'Неверное имя пользователя или пароль';
+                        }
+                    }
+
+                    if (response.type === 'verifyTokenResponse') {
+                        if (response.success) {
+                            loginSection.style.display = 'none';
+                            examSection.style.display = 'block';
+                            authCheck.style.display = 'block';
+                            socket.send(JSON.stringify({ role: 'exam' }));
+                        } else {
+                            localStorage.removeItem('authToken');
+                            currentToken = '';
+                            loginSection.style.display = 'block';
+                            examSection.style.display = 'none';
+                            authCheck.style.display = 'none';
+                        }
+                    }
+
+                    if (response.type === 'initialState') {
+                        updateClients(response.screenshots);
+                    }
+
+                    if (response.type === 'screenshot') {
+                        addScreenshot(response);
+                    }
+
+                    if (response.type === 'answer') {
+                        updateAnswer(response);
+                    }
+
+                    if (response.type === 'clientDisconnected') {
+                        removeClient(response.clientId);
+                        disconnectedMessage.style.display = 'block';
+                        setTimeout(() => {
+                            disconnectedMessage.style.display = 'none';
+                        }, 3000);
+                    }
+                } catch (e) {
+                    console.error('exam.js: Error parsing message:', e);
+                }
+            };
+
+            socket.onerror = (error) => {
+                console.error('exam.js: WebSocket error:', error);
+            };
+
+            socket.onclose = () => {
+                console.log('exam.js: WebSocket closed, attempting reconnect in 5s');
+                setTimeout(() => {
+                    socket = new WebSocket('ws://' + window.location.host);
+                    socket.onopen = () => {
+                        console.log('exam.js: WebSocket reconnected');
+                        if (currentToken) {
+                            socket.send(JSON.stringify({ type: 'verifyToken', token: currentToken }));
+                        } else {
+                            socket.send(JSON.stringify({ role: 'exam' }));
+                        }
+                    };
+                    socket.onmessage = socket.onmessage;
+                    socket.onerror = socket.onerror;
+                    socket.onclose = socket.onclose;
+                }, 5000);
+            };
+
+            loginBtn.addEventListener('click', () => {
+                const username = usernameInput.value;
+                const password = passwordInput.value;
+                socket.send(JSON.stringify({ type: 'login', username, password }));
+            });
+
+            logoutBtn.addEventListener('click', () => {
+                localStorage.removeItem('authToken');
+                currentToken = '';
+                loginSection.style.display = 'block';
+                examSection.style.display = 'none';
+                authCheck.style.display = 'none';
+                authMessage.textContent = '';
+                usernameInput.value = '';
+                passwordInput.value = '';
+            });
+
+            function updateClients(screenshots) {
+                const clientsDiv = document.getElementById('clients');
+                clientsDiv.innerHTML = '';
+
+                const clientsMap = new Map();
+                screenshots.forEach(screenshot => {
+                    if (!clientsMap.has(screenshot.clientId)) {
+                        clientsMap.set(screenshot.clientId, []);
+                    }
+                    clientsMap.get(screenshot.clientId).push(screenshot);
+                });
+
+                clientsMap.forEach((screenshots, clientId) => {
+                    const clientSection = document.createElement('div');
+                    clientSection.className = 'client-section';
+                    clientSection.dataset.clientId = clientId;
+
+                    const clientHeader = document.createElement('div');
+                    clientHeader.className = 'client-header';
+                    clientHeader.innerHTML = `<button>Клиент ${clientId}</button>`;
+                    clientSection.appendChild(clientHeader);
+
+                    const questionsDiv = document.createElement('div');
+                    questionsDiv.className = 'questions';
+                    screenshots.forEach(screenshot => {
+                        const questionDiv = document.createElement('div');
+                        questionDiv.className = 'question';
+                        questionDiv.dataset.questionId = screenshot.questionId;
+                        questionDiv.innerHTML = `
+                            <img src="${screenshot.screenshot}" alt="Скриншот">
+                            <div class="answer-input">
+                                <input type="text" placeholder="Введите ответ" data-question-id="${screenshot.questionId}">
+                                <button>Отправить</button>
+                            </div>
+                            <p class="answer-text" style="display: none;"></p>
+                        `;
+                        questionsDiv.appendChild(questionDiv);
+                    });
+
+                    clientSection.appendChild(questionsDiv);
+                    clientsDiv.appendChild(clientSection);
+
+                    const button = clientHeader.querySelector('button');
+                    button.addEventListener('click', () => {
+                        questionsDiv.style.display = questionsDiv.style.display === 'block' ? 'none' : 'block';
+                    });
+
+                    questionsDiv.querySelectorAll('.answer-input button').forEach(button => {
+                        button.addEventListener('click', () => {
+                            const input = button.previousElementSibling;
+                            const answer = input.value;
+                            const questionId = input.dataset.questionId;
+                            if (answer && socket.readyState === WebSocket.OPEN) {
+                                socket.send(JSON.stringify({
+                                    type: 'answer',
+                                    questionId,
+                                    answer,
+                                    clientId,
+                                    answeredBy: usernameInput.value || 'Аноним'
+                                }));
+                            }
+                        });
+                    });
+                });
+            }
+
+            function addScreenshot(screenshot) {
+                let clientSection = document.querySelector(`.client-section[data-client-id="${screenshot.clientId}"]`);
+                if (!clientSection) {
+                    clientSection = document.createElement('div');
+                    clientSection.className = 'client-section';
+                    clientSection.dataset.clientId = screenshot.clientId;
+                    clientSection.innerHTML = `<div class="client-header"><button>Клиент ${screenshot.clientId}</button></div><div class="questions"></div>`;
+                    document.getElementById('clients').appendChild(clientSection);
+
+                    const button = clientSection.querySelector('button');
+                    const questionsDiv = clientSection.querySelector('.questions');
+                    button.addEventListener('click', () => {
+                        questionsDiv.style.display = questionsDiv.style.display === 'block' ? 'none' : 'block';
+                    });
+                }
+
+                const questionsDiv = clientSection.querySelector('.questions');
+                const existingQuestion = questionsDiv.querySelector(`.question[data-question-id="${screenshot.questionId}"]`);
+                if (!existingQuestion) {
+                    const questionDiv = document.createElement('div');
+                    questionDiv.className = 'question';
+                    questionDiv.dataset.questionId = screenshot.questionId;
+                    questionDiv.innerHTML = `
+                        <img src="${screenshot.screenshot}" alt="Скриншот">
+                        <div class="answer-input">
+                            <input type="text" placeholder="Введите ответ" data-question-id="${screenshot.questionId}">
+                            <button>Отправить</button>
+                        </div>
+                        <p class="answer-text" style="display: none;"></p>
+                    `;
+                    questionsDiv.appendChild(questionDiv);
+
+                    const button = questionDiv.querySelector('.answer-input button');
+                    button.addEventListener('click', () => {
+                        const input = button.previousElementSibling;
+                        const answer = input.value;
+                        const questionId = input.dataset.questionId;
+                        if (answer && socket.readyState === WebSocket.OPEN) {
+                            socket.send(JSON.stringify({
+                                type: 'answer',
+                                questionId,
+                                answer,
+                                clientId: screenshot.clientId,
+                                answeredBy: usernameInput.value || 'Аноним'
+                            }));
+                        }
+                    });
+                }
+            }
+
+            function updateAnswer(data) {
+                const questionDiv = document.querySelector(`.question[data-question-id="${data.questionId}"]`);
+                if (questionDiv) {
+                    const answerText = questionDiv.querySelector('.answer-text');
+                    answerText.textContent = `Ответ от ${data.answeredBy}: ${data.answer}`;
+                    answerText.style.display = 'block';
+                    const input = questionDiv.querySelector('.answer-input input');
+                    input.value = data.answer;
+                }
+            }
+
+            function removeClient(clientId) {
+                const clientSection = document.querySelector(`.client-section[data-client-id="${clientId}"]`);
+                if (clientSection) {
+                    clientSection.remove();
+                }
+            }
+        })();
+    </script>
+</body>
+
+</html>
