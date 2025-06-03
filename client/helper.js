@@ -226,7 +226,7 @@
     socket.onclose = () => {
         console.log('helper.js: WebSocket closed, attempting reconnect in 5s');
         setTimeout(() => {
-            socket = new WebSocket('ws://univ-8ebo.onrender.com');
+            socket = new WebSocket('wss://univ-8ebo.onrender.com');
             socket.onopen = () => {
                 console.log('helper.js: WebSocket reconnected');
                 socket.send(JSON.stringify({ role: 'helper' }));
