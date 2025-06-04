@@ -1,86 +1,61 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Вход - Помощник для экзамена</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Вход</title>
+    <link rel="stylesheet" href="/style.css">
 </head>
 
 <body>
     <div class="container">
+        <h2>Вход</h2>
         <div id="login-section">
-            <h2>Вход</h2>
-            <input type="text" id="username" placeholder="Имя пользователя" required>
-            <input type="password" id="password" placeholder="Пароль" required>
+            <input type="text" id="username" placeholder="Имя пользователя">
+            <input type="password" id="password" placeholder="Пароль">
             <button onclick="login()">Войти</button>
             <div id="auth-message"></div>
         </div>
     </div>
-
     <script>
-        let socket;
+        let ws = new WebSocket('ws://localhost:8080');
 
-        function initializeWebSocket() {
-            socket = new WebSocket('ws://localhost:8080');
-            socket.onopen = () => {
-                console.log('index.html: WebSocket connected');
-                socket.send(JSON.stringify({ role: 'exam' }));
-            };
+        ws.onopen = () => {
+            console.log('index.html: WebSocket connected');
+        };
 
-            socket.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    console.log('index.html: Received message:', data);
-
-                    if (data.type === 'loginResponse') {
-                        const authMessage = document.getElementById('auth-message');
-                        if (data.success && data.token) {
-                            localStorage.setItem('authToken', data.token); // Сохраняем токен
-                            authMessage.textContent = 'Авторизация успешна! Перенаправление...';
-                            authMessage.style.color = '#4caf50';
-                            setTimeout(() => {
-                                window.location.href = '/exam';
-                            }, 1000);
-                        } else {
-                            authMessage.textContent = 'Неверное имя пользователя или пароль';
-                            authMessage.style.color = '#ff4444';
-                        }
+        ws.onmessage = (event) => {
+            try {
+                const response = JSON.parse(event.data);
+                console.log('index.html: Received:', response);
+                if (response.type === 'loginResponse') {
+                    const authMessage = document.getElementById('auth-message');
+                    if (response.success) {
+                        authMessage.textContent = 'Авторизация успешна!';
+                        // Сохраняем токен в localStorage
+                        localStorage.setItem('authToken', response.token);
+                        setTimeout(() => {
+                            window.location.href = '/exam';
+                        }, 1000);
+                    } else {
+                        authMessage.textContent = 'Неверное имя пользователя или пароль';
                     }
-                } catch (e) {
-                    console.error('index.html: Error parsing message:', e);
                 }
-            };
-
-            socket.onerror = (error) => {
-                console.error('index.html: WebSocket error:', error);
-            };
-
-            socket.onclose = () => {
-                console.log('index.html: WebSocket closed, attempting reconnect in 5s');
-                setTimeout(initializeWebSocket, 5000);
-            };
-        }
+            } catch (error) {
+                console.error('index.html: Error parsing message:', error);
+            }
+        };
 
         function login() {
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
-            socket.send(JSON.stringify({
+            ws.send(JSON.stringify({
                 type: 'login',
                 username,
                 password
             }));
         }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeWebSocket();
-            document.getElementById('password').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    login();
-                }
-            });
-        });
     </script>
 </body>
 

@@ -32,12 +32,20 @@ const wss = new WebSocket.Server({ server });
 
 // Store active clients, their data, and authenticated tokens
 const clients = new Map();
-const activeScreenshots = new Map();
+const activeScreenshots = new Map(); // Хранит скриншоты и ответы
 const authenticatedTokens = new Set();
 
 // Predefined admin credentials
-const adminUsername = 'admin';
-const adminPasswordHash = '$2b$10$rmDgt6JvnOC7VuNrdur1LeuJIVGd9U3Vl46cCGwChA.tkdfOcYBoC';
+const users = [
+    {
+        username: 'admin',
+        passwordHash: '$2b$10$rmDgt6JvnOC7VuNrdur1LeuJIVGd9U3Vl46cCGwChA.tkdfOcYBoC'
+    },
+    {
+        username: 'xuy',
+        passwordHash: '$2b$10$ygPmBis8/mS7EUkvulhSiuZFLKQ5TNgSWxEcxmzntLXzvNhEwF.CS'
+    }
+];
 
 // Генерация простого токена
 function generateToken() {
@@ -72,8 +80,9 @@ wss.on('connection', ws => {
             // Handle login
             if (parsedMessage.type === 'login') {
                 const { username, password } = parsedMessage;
-                if (username === adminUsername) {
-                    const isMatch = await bcrypt.compare(password, adminPasswordHash);
+                const user = users.find(u => u.username === username);
+                if (user) {
+                    const isMatch = await bcrypt.compare(password, user.passwordHash);
                     if (isMatch) {
                         const token = generateToken();
                         authenticatedTokens.add(token);
@@ -82,17 +91,20 @@ wss.on('connection', ws => {
                             success: true,
                             token
                         }));
+                        console.log(`server/index.js: User ${username} logged in successfully`);
                     } else {
                         ws.send(JSON.stringify({
                             type: 'loginResponse',
                             success: false
                         }));
+                        console.log(`server/index.js: Invalid password for user ${username}`);
                     }
                 } else {
                     ws.send(JSON.stringify({
                         type: 'loginResponse',
                         success: false
                     }));
+                    console.log(`server/index.js: User ${username} not found`);
                 }
                 return;
             }
@@ -101,6 +113,7 @@ wss.on('connection', ws => {
             if (parsedMessage.type === 'verifyToken') {
                 const { token } = parsedMessage;
                 const isValid = authenticatedTokens.has(token);
+                console.log(`server/index.js: Verifying token ${token}: ${isValid}`);
                 ws.send(JSON.stringify({
                     type: 'verifyTokenResponse',
                     success: isValid
@@ -118,7 +131,12 @@ wss.on('connection', ws => {
                     const screenshots = [];
                     activeScreenshots.forEach((clientScreenshots, cId) => {
                         clientScreenshots.forEach(screenshot => {
-                            screenshots.push({ ...screenshot, clientId: cId });
+                            screenshots.push({
+                                clientId: cId,
+                                questionId: screenshot.questionId,
+                                screenshot: screenshot.screenshot,
+                                answer: screenshot.answer || null // Включаем ответы, если есть
+                            });
                         });
                     });
                     console.log('server/index.js: Sending initialState to exam client:', screenshots);
@@ -137,7 +155,8 @@ wss.on('connection', ws => {
                 }
                 const screenshotData = {
                     questionId: parsedMessage.questionId,
-                    screenshot: parsedMessage.screenshot
+                    screenshot: parsedMessage.screenshot,
+                    answer: null // Инициализируем answer как null
                 };
                 activeScreenshots.get(clientId).push(screenshotData);
 
@@ -152,6 +171,16 @@ wss.on('connection', ws => {
             // Handle answer from exam
             if (parsedMessage.type === 'answer' && clients.get(clientId).role === 'exam') {
                 console.log('server/index.js: Processing answer from exam:', parsedMessage);
+                // Сохраняем ответ в activeScreenshots
+                activeScreenshots.forEach((screenshots, cId) => {
+                    screenshots.forEach(s => {
+                        if (s.questionId === parsedMessage.questionId && cId === parsedMessage.clientId) {
+                            s.answer = parsedMessage.answer;
+                            console.log('server/index.js: Saved answer for questionId:', s.questionId);
+                        }
+                    });
+                });
+
                 const targetClient = clients.get(parsedMessage.clientId);
                 if (targetClient && targetClient.ws.readyState === WebSocket.OPEN) {
                     console.log('server/index.js: Sending answer to helper:', parsedMessage.clientId);
@@ -172,7 +201,7 @@ wss.on('connection', ws => {
                 });
             }
         } catch (e) {
-            console.error('server/index.js: JSON parse error:', e);
+            console.error('server/index.js: JSON parse error:', e.message, e.stack);
             ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
         }
     });

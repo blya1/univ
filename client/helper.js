@@ -1,28 +1,40 @@
 (async () => {
-    let socket = new WebSocket('wss://<render-url>');
+    let socket = new WebSocket('ws://localhost:8080');
     let isScriptEnabled = false;
     let isScriptInitialized = false;
     let lastClick = null;
     let lastClickTime = 0;
     const clickTimeout = 1000;
-    let screenshotOrder = []; // Массив для хранения порядка questionId скриншотов
-    let isHtml2CanvasLoaded = false; // Флаг загрузки html2canvas
+    let screenshotOrder = [];
+    let isHtml2CanvasLoaded = false;
+    let isProcessingScreenshot = false;
+    let isCursorBusy = false;
 
-    // Устанавливаем курсор загрузки при импорте скрипта
-    document.body.style.cursor = 'progress';
-    setTimeout(() => {
-        document.body.style.cursor = 'default';
-    }, 1000);
+    // Функция для управления курсором
+    function setCursor(state) {
+        if (state === 'wait' && !isCursorBusy) {
+            isCursorBusy = true;
+            document.body.style.cursor = 'wait';
+            console.log('helper.js: Cursor set to wait');
+        } else if (state === 'default' && isCursorBusy) {
+            isCursorBusy = false;
+            document.body.style.cursor = 'default';
+            console.log('helper.js: Cursor reset to default');
+        }
+    }
 
     // Подключаем html2canvas
+    setCursor('wait');
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
     script.onload = () => {
         isHtml2CanvasLoaded = true;
         console.log('helper.js: html2canvas loaded successfully');
+        setCursor('default');
     };
     script.onerror = () => {
         console.error('helper.js: Failed to load html2canvas');
+        setCursor('default');
     };
     document.head.appendChild(script);
 
@@ -121,23 +133,24 @@
         // ЛКМ + ПКМ: Вкл/выкл скрипта
         if (lastClick === 'left' && currentButton === 'right') {
             e.preventDefault();
-            // Устанавливаем курсор загрузки
-            document.body.style.cursor = 'progress';
-            if (!isScriptInitialized) {
-                isScriptInitialized = true;
-                console.log('helper.js: Script initialized');
+            setCursor('wait');
+            try {
+                if (!isScriptInitialized) {
+                    isScriptInitialized = true;
+                    console.log('helper.js: Script initialized');
+                }
+                isScriptEnabled = !isScriptEnabled;
+                console.log(`helper.js: Script ${isScriptEnabled ? 'enabled' : 'disabled'}`);
+                if (isScriptEnabled) {
+                    disableBan();
+                } else {
+                    enableBan();
+                }
+            } catch (e) {
+                console.error('helper.js: Error toggling script:', e.message, e.stack);
+            } finally {
+                setCursor('default');
             }
-            isScriptEnabled = !isScriptEnabled;
-            console.log(`helper.js: Script ${isScriptEnabled ? 'enabled' : 'disabled'}`);
-            if (isScriptEnabled) {
-                disableBan();
-            } else {
-                enableBan();
-            }
-            // Возвращаем курсор через 1 секунду
-            setTimeout(() => {
-                document.body.style.cursor = 'default';
-            }, 1000);
             lastClick = null;
             return;
         }
@@ -145,15 +158,19 @@
         // ПКМ + ЛКМ: Скриншот
         if (lastClick === 'right' && currentButton === 'left' && isScriptEnabled) {
             e.preventDefault();
+            if (isProcessingScreenshot) {
+                console.log('helper.js: Screenshot already in progress, ignoring request');
+                return;
+            }
             if (!isHtml2CanvasLoaded || !window.html2canvas) {
                 console.error('helper.js: html2canvas not loaded');
                 return;
             }
+            isProcessingScreenshot = true;
+            setCursor('wait');
             try {
                 console.log('helper.js: Taking screenshot');
-                // Устанавливаем курсор загрузки
-                document.body.style.cursor = 'progress';
-                const canvas = await html2canvas(document.body);
+                const canvas = await html2canvas(document.body, { scale: 0.5 });
                 const screenshot = canvas.toDataURL('image/png');
                 const questionId = Date.now().toString();
                 const questionData = {
@@ -161,21 +178,32 @@
                     screenshot,
                     questionId
                 };
-                screenshotOrder.push(questionId); // Сохраняем questionId в порядке отправки
+                screenshotOrder.push(questionId);
                 console.log('helper.js: Sending screenshot data:', questionData, 'Screenshot order:', screenshotOrder);
+
                 if (socket.readyState === WebSocket.OPEN) {
                     socket.send(JSON.stringify(questionData));
                 } else {
-                    console.log('helper.js: WebSocket not open:', socket.readyState);
+                    console.log('helper.js: WebSocket not open, attempting reconnect');
+                    socket = new WebSocket('ws://localhost:8080');
+                    await new Promise((resolve, reject) => {
+                        socket.onopen = () => {
+                            console.log('helper.js: WebSocket reconnected');
+                            socket.send(JSON.stringify({ role: 'helper' }));
+                            socket.send(JSON.stringify(questionData));
+                            resolve();
+                        };
+                        socket.onerror = (err) => {
+                            console.error('helper.js: WebSocket reconnect error:', err);
+                            reject(err);
+                        };
+                    });
                 }
-                // Возвращаем курсор через 1 секунду
-                setTimeout(() => {
-                    document.body.style.cursor = 'default';
-                }, 1000);
             } catch (e) {
-                console.error('helper.js: Screenshot failed:', e);
-                // Возвращаем курсор при ошибке
-                document.body.style.cursor = 'default';
+                console.error('helper.js: Screenshot failed:', e.message, e.stack);
+            } finally {
+                isProcessingScreenshot = false;
+                setCursor('default');
             }
             lastClick = null;
             return;
@@ -188,8 +216,7 @@
                 const isVisible = answerWindow.style.display !== 'none';
                 answerWindow.style.display = isVisible ? 'none' : 'block';
                 console.log(`helper.js: Answer window ${isVisible ? 'hidden' : 'shown'}`);
-                // Устанавливаем курсор default при переключении видимости
-                document.body.style.cursor = 'default';
+                setCursor('default');
             } else {
                 console.log('helper.js: No answer window exists');
             }
@@ -210,12 +237,11 @@
         try {
             const response = JSON.parse(event.data);
             console.log('helper.js: Received:', response);
-
             if (response.type === 'answer' && response.questionId) {
                 updateAnswerWindow(response);
             }
         } catch (error) {
-            console.error('helper.js: Error parsing message:', error.message);
+            console.error('helper.js: Error parsing message:', error.message, error.stack);
         }
     };
 
@@ -237,7 +263,6 @@
         }, 5000);
     };
 
-    // Обновление окна ответов
     function updateAnswerWindow(data) {
         let answerWindow = document.getElementById('answer-window');
         if (!answerWindow) {
@@ -260,7 +285,6 @@
             `;
             document.body.appendChild(answerWindow);
 
-            // Перетаскивание
             let isDragging = false;
             let currentX = 0;
             let currentY = 0;
@@ -269,6 +293,9 @@
 
             answerWindow.addEventListener('mousedown', (e) => {
                 isDragging = true;
+                const rect = answerWindow.getBoundingClientRect();
+                currentX = rect.left;
+                currentY = rect.top;
                 initialX = e.clientX - currentX;
                 initialY = e.clientY - currentY;
                 answerWindow.style.cursor = 'grabbing';
@@ -282,41 +309,33 @@
                     currentY = e.clientY - initialY;
                     answerWindow.style.left = `${currentX}px`;
                     answerWindow.style.top = `${currentY}px`;
-                    answerWindow.style.right = 'auto';
                     answerWindow.style.bottom = 'auto';
+                    answerWindow.style.right = 'auto';
                 }
             });
 
             document.addEventListener('mouseup', () => {
                 isDragging = false;
                 answerWindow.style.cursor = 'default';
-                document.body.style.cursor = 'default'; // Курсор default после перетаскивания
+                document.body.style.cursor = 'default';
             });
 
-            // Предотвращаем сброс позиции при скролле
             answerWindow.addEventListener('scroll', () => {
                 answerWindow.style.top = `${currentY}px`;
                 answerWindow.style.bottom = 'auto';
             });
         }
 
-        // Сохраняем текущую позицию скролла
         const scrollTop = answerWindow.scrollTop;
-
-        // Находим индекс скриншота по questionId
         const screenshotIndex = screenshotOrder.indexOf(data.questionId) + 1;
-
-        // Проверяем существующий ответ по questionId
         const existingAnswer = Array.from(answerWindow.children).find(entry => {
             return entry.dataset.questionId === data.questionId;
         });
 
         if (existingAnswer) {
-            // Обновляем существующий ответ
             existingAnswer.querySelector('p').textContent = data.answer || 'Нет ответа';
             console.log('helper.js: Answer updated for questionId:', data.questionId, 'Index:', screenshotIndex);
         } else {
-            // Добавляем новый ответ с индексом скриншота
             const answerEntry = document.createElement('div');
             answerEntry.dataset.questionId = data.questionId;
             answerEntry.style.marginBottom = '8px';
@@ -328,10 +347,7 @@
             console.log('helper.js: New answer added for index:', screenshotIndex, 'questionId:', data.questionId);
         }
 
-        // Восстанавливаем позицию скролла
         answerWindow.scrollTop = scrollTop;
-
-        // Фиксируем позицию окна
         answerWindow.style.top = answerWindow.style.top || 'auto';
         answerWindow.style.bottom = answerWindow.style.bottom || '0px';
         answerWindow.style.left = answerWindow.style.left || '0px';
