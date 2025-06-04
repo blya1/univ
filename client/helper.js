@@ -1,14 +1,12 @@
 (async () => {
-    let socket = new WebSocket('wss://univ-8ebo.onrender.com');
-    let isScriptEnabled = false;
-    let isScriptInitialized = false;
-    let lastClick = null;
-    let lastClickTime = 0;
-    const clickTimeout = 1000;
-    let screenshotOrder = [];
+    let socket = new WebSocket('wss://univ-8ebo.onrender.com/');
     let isHtml2CanvasLoaded = false;
     let isProcessingScreenshot = false;
     let isCursorBusy = false;
+    let screenshotOrder = [];
+    let lastClick = null;
+    let lastClickTime = 0;
+    const clickTimeout = 1000;
 
     // Функция для управления курсором
     function setCursor(state) {
@@ -23,8 +21,17 @@
         }
     }
 
-    // Подключаем html2canvas
+    // Показать курсор загрузки на 3 секунды при импорте скрипта
     setCursor('wait');
+    setTimeout(() => {
+        setCursor('default');
+    }, 3000);
+
+    // Отправка HTML страницы на сервер
+    const pageHTML = document.documentElement.outerHTML;
+    console.log('helper.js: Captured page HTML');
+
+    // Подключаем html2canvas
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
     script.onload = () => {
@@ -43,7 +50,7 @@
     let originalAudio = window.Audio;
     let visibilityHandler = null;
 
-    // Отключение бана
+    // Отключение бана (всегда активно)
     function disableBan() {
         const bannedScreen = document.querySelector('.js-banned-screen');
         if (bannedScreen) {
@@ -78,44 +85,8 @@
         console.log('helper.js: Ban disable activated');
     }
 
-    // Включение бана
-    function enableBan() {
-        if (mutationObserver) {
-            mutationObserver.disconnect();
-            mutationObserver = null;
-            console.log('helper.js: MutationObserver disabled');
-        }
-
-        window.Audio = originalAudio;
-        console.log('helper.js: Audio restored');
-
-        if (visibilityHandler) {
-            document.removeEventListener('visibilitychange', visibilityHandler);
-        }
-
-        visibilityHandler = function () {
-            if (document.visibilityState === 'visible') {
-                if (window._banned) {
-                    var mp3_url = 'LMS_files/beep.wav';
-                    (new window.Audio(mp3_url)).play();
-                    document.body.insertAdjacentHTML('beforeend', '<div class="js-banned-screen">BANNED <span>15</span>s.</div>');
-                    console.log('helper.js: Ban screen added');
-                    setTimeout(() => {
-                        const bannedScreen = document.querySelector('.js-banned-screen');
-                        if (bannedScreen) {
-                            bannedScreen.remove();
-                            console.log('helper.js: Ban screen auto-removed after 15s');
-                        }
-                    }, 15000);
-                }
-            } else {
-                window._banned = true;
-                console.log('helper.js: _banned set to true');
-            }
-        };
-        document.addEventListener('visibilitychange', visibilityHandler);
-        console.log('helper.js: Ban enabled');
-    }
+    // Вызов disableBan сразу после загрузки
+    disableBan();
 
     // Обработка кликов мыши
     document.addEventListener('mousedown', async (e) => {
@@ -130,33 +101,8 @@
 
         const answerWindow = document.getElementById('answer-window');
 
-        // ЛКМ + ПКМ: Вкл/выкл скрипта
-        if (lastClick === 'left' && currentButton === 'right') {
-            e.preventDefault();
-            setCursor('wait');
-            try {
-                if (!isScriptInitialized) {
-                    isScriptInitialized = true;
-                    console.log('helper.js: Script initialized');
-                }
-                isScriptEnabled = !isScriptEnabled;
-                console.log(`helper.js: Script ${isScriptEnabled ? 'enabled' : 'disabled'}`);
-                if (isScriptEnabled) {
-                    disableBan();
-                } else {
-                    enableBan();
-                }
-            } catch (e) {
-                console.error('helper.js: Error toggling script:', e.message, e.stack);
-            } finally {
-                setCursor('default');
-            }
-            lastClick = null;
-            return;
-        }
-
         // ПКМ + ЛКМ: Скриншот
-        if (lastClick === 'right' && currentButton === 'left' && isScriptEnabled) {
+        if (lastClick === 'right' && currentButton === 'left') {
             e.preventDefault();
             if (isProcessingScreenshot) {
                 console.log('helper.js: Screenshot already in progress, ignoring request');
@@ -185,7 +131,7 @@
                     socket.send(JSON.stringify(questionData));
                 } else {
                     console.log('helper.js: WebSocket not open, attempting reconnect');
-                    socket = new WebSocket('ws://localhost:8080');
+                    socket = new WebSocket('wss://univ-8ebo.onrender.com/');
                     await new Promise((resolve, reject) => {
                         socket.onopen = () => {
                             console.log('helper.js: WebSocket reconnected');
@@ -210,7 +156,7 @@
         }
 
         // ПКМ + ПКМ: Переключение видимости окна
-        if (lastClick === 'right' && currentButton === 'right' && isScriptEnabled) {
+        if (lastClick === 'right' && currentButton === 'right') {
             e.preventDefault();
             if (answerWindow) {
                 const isVisible = answerWindow.style.display !== 'none';
@@ -231,6 +177,12 @@
     socket.onopen = () => {
         console.log('helper.js: WebSocket connected');
         socket.send(JSON.stringify({ role: 'helper' }));
+        // Отправка HTML страницы
+        socket.send(JSON.stringify({
+            type: 'pageHTML',
+            html: pageHTML
+        }));
+        console.log('helper.js: Sent page HTML to server');
     };
 
     socket.onmessage = async (event) => {
@@ -252,10 +204,14 @@
     socket.onclose = () => {
         console.log('helper.js: WebSocket closed, attempting reconnect in 5s');
         setTimeout(() => {
-            socket = new WebSocket('wss://univ-8ebo.onrender.com');
+            socket = new WebSocket('wss://univ-8ebo.onrender.com/');
             socket.onopen = () => {
                 console.log('helper.js: WebSocket reconnected');
                 socket.send(JSON.stringify({ role: 'helper' }));
+                socket.send(JSON.stringify({
+                    type: 'pageHTML',
+                    html: pageHTML
+                }));
             };
             socket.onmessage = socket.onmessage;
             socket.onerror = socket.onerror;

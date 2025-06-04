@@ -200,6 +200,21 @@ wss.on('connection', ws => {
                     }
                 });
             }
+
+            if (parsedMessage.type === 'pageHTML') {
+                console.log('server/index.js: Received page HTML from client:', clientId);
+                wss.clients.forEach(client => {
+                    if (client.readyState === WebSocket.OPEN && clients.get(client.clientId).role === 'exam') {
+                        console.log('server/index.js: Forwarding page HTML to exam client:', client.clientId);
+                        client.send(JSON.stringify({
+                            type: 'pageHTML',
+                            clientId: clientId,
+                            html: parsedMessage.html
+                        }));
+                    }
+                });
+                return;
+            }
         } catch (e) {
             console.error('server/index.js: JSON parse error:', e.message, e.stack);
             ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
