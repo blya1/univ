@@ -21,44 +21,71 @@
     <script>
         let ws = new WebSocket('ws://localhost:8080');
 
+<<<<<<< HEAD
+        ws.onopen = () => {
+            console.log('index.html: WebSocket connected');
+        };
+=======
         function initializeWebSocket() {
             socket = new WebSocket('ws://localhost:8080');
             socket.onopen = () => {
                 console.log('index.html: WebSocket connected');
                 socket.send(JSON.stringify({ role: 'exam' }));
             };
+>>>>>>> 0aa341a35d81d7b4cb581b2dbbe6ccf2d9ea9c07
 
-            ws.onmessage = (event) => {
-                try {
-                    const response = JSON.parse(event.data);
-                    console.log('index.html: Received:', response);
-                    if (response.type === 'loginResponse') {
-                        const authMessage = document.getElementById('auth-message');
-                        if (response.success) {
-                            authMessage.textContent = 'Авторизация успешна!';
-                            // Сохраняем токен в localStorage
-                            localStorage.setItem('authToken', response.token);
-                            setTimeout(() => {
-                                window.location.href = '/exam';
-                            }, 1000);
-                        } else {
-                            authMessage.textContent = 'Неверное имя пользователя или пароль';
-                        }
+        socket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                console.log('index.html: Received message:', data);
+
+                if (data.type === 'loginResponse') {
+                    const authMessage = document.getElementById('auth-message');
+                    if (data.success && data.token) {
+                        localStorage.setItem('authToken', data.token); // Сохраняем токен
+                        authMessage.textContent = 'Авторизация успешна! Перенаправление...';
+                        authMessage.style.color = '#4caf50';
+                        setTimeout(() => {
+                            window.location.href = '/exam';
+                        }, 1000);
+                    } else {
+                        authMessage.textContent = 'Неверное имя пользователя или пароль';
+                        authMessage.style.color = '#ff4444';
                     }
-                } catch (error) {
-                    console.error('index.html: Error parsing message:', error);
                 }
-            };
-
-            function login() {
-                const username = document.getElementById('username').value;
-                const password = document.getElementById('password').value;
-                ws.send(JSON.stringify({
-                    type: 'login',
-                    username,
-                    password
-                }));
+            } catch (e) {
+                console.error('index.html: Error parsing message:', e);
             }
+        };
+
+        socket.onerror = (error) => {
+            console.error('index.html: WebSocket error:', error);
+        };
+
+        socket.onclose = () => {
+            console.log('index.html: WebSocket closed, attempting reconnect in 5s');
+            setTimeout(initializeWebSocket, 5000);
+        };
+        }
+
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            socket.send(JSON.stringify({
+                type: 'login',
+                username,
+                password
+            }));
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeWebSocket();
+            document.getElementById('password').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    login();
+                }
+            });
+        });
     </script>
 </body>
 

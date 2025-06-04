@@ -1,5 +1,5 @@
 (async () => {
-    let socket = new WebSocket('wss://<render-url>');
+    let socket = new WebSocket('wss://univ-8ebo.onrender.com');
     let isScriptEnabled = false;
     let isScriptInitialized = false;
     let lastClick = null;
