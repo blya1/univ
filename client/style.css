@@ -206,6 +206,15 @@ h3 {
     display: none;
 }
 
+.client-section .questions {
+    display: none;
+    margin-top: 12px;
+}
+
+.client-section .questions.visible {
+    display: block;
+}
+
 @keyframes fadeIn {
     from {
         opacity: 0;
