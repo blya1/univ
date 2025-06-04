@@ -23,209 +23,225 @@
         <div id="disconnected-message">Пользователь отключился</div>
     </div>
     <script>
-        let ws = new WebSocket('ws://localhost:8080');
-        let isAuthorized = false;
-        let pendingMessages = [];
+        (async () => {
+            let socket = new WebSocket('ws://' + window.location.host);
+            let currentToken = localStorage.getItem('authToken') || '';
 
-        ws.onopen = () => {
-            console.log('exam.html: WebSocket connected');
-            const token = localStorage.getItem('authToken');
-            if (token) {
-                ws.send(JSON.stringify({ type: 'verifyToken', token }));
-            } else {
-                showNotAuthorized();
-            }
-            ws.send(JSON.stringify({ role: 'exam' }));
-        };
+            const loginSection = document.getElementById('login-section');
+            const examSection = document.getElementById('exam-section');
+            const authCheck = document.getElementById('auth-check');
+            const loginBtn = document.getElementById('login-btn');
+            const usernameInput = document.getElementById('username');
+            const passwordInput = document.getElementById('password');
+            const authMessage = document.getElementById('auth-message');
+            const logoutBtn = document.getElementById('logout-btn');
+            const disconnectedMessage = document.getElementById('disconnected-message');
 
-        ws.onmessage = (event) => {
-            try {
-                const response = JSON.parse(event.data);
-                console.log('exam.html: Received message:', response);
-
-                if (response.type === 'verifyTokenResponse') {
-                    if (response.success) {
-                        isAuthorized = true;
-                        document.getElementById('authorized').style.display = 'block';
-                        document.getElementById('not-authorized').style.display = 'none';
-                        pendingMessages.forEach(msg => processMessage(msg));
-                        pendingMessages = [];
-                    } else {
-                        showNotAuthorized();
-                    }
-                } else if (isAuthorized) {
-                    processMessage(response);
-                } else {
-                    console.log('exam.html: Buffering message until authorized:', response);
-                    pendingMessages.push(response);
-                }
-            } catch (error) {
-                console.error('exam.html: Error parsing message:', error);
-            }
-        };
-
-        ws.onerror = (error) => {
-            console.error('exam.html: WebSocket error:', error);
-        };
-
-        ws.onclose = () => {
-            console.log('exam.html: WebSocket closed, attempting reconnect in 5s');
-            setTimeout(() => {
-                ws = new WebSocket('ws://localhost:8080');
-                ws.onopen = () => {
-                    console.log('exam.html: WebSocket reconnected');
-                    const token = localStorage.getItem('authToken');
-                    if (token) {
-                        ws.send(JSON.stringify({ type: 'verifyToken', token }));
-                    }
-                    ws.send(JSON.stringify({ role: 'exam' }));
+            // Проверка токена при загрузке
+            if (currentToken) {
+                socket.onopen = () => {
+                    socket.send(JSON.stringify({ type: 'verifyToken', token: currentToken }));
                 };
-            }, 5000);
-        };
-
-        function processMessage(response) {
-            console.log('exam.html: Processing message:', response);
-            if (response.type === 'initialState') {
-                console.log('exam.html: Processing initialState:', response.screenshots);
-                updateClients(response.screenshots);
-            } else if (response.type === 'screenshot') {
-                console.log('exam.html: Processing screenshot:', response);
-                addScreenshot(response.clientId, response);
-            } else if (response.type === 'answer') {
-                updateAnswer(response.clientId, response);
-            } else if (response.type === 'clientDisconnected') {
-                showDisconnectedMessage(response.clientId);
             }
-        }
 
-        function showNotAuthorized() {
-            document.getElementById('not-authorized').style.display = 'block';
-            document.getElementById('authorized').style.display = 'none';
-            setTimeout(() => {
-                window.location.href = '/';
-            }, 2000);
-        }
-
-        function logout() {
-            const token = localStorage.getItem('authToken');
-            if (token) {
-                ws.send(JSON.stringify({ type: 'logout', token }));
-            }
-            localStorage.removeItem('authToken');
-            window.location.href = '/';
-        }
-
-        function updateClients(screenshots) {
-            console.log('exam.html: Updating clients with screenshots:', screenshots);
-            const clientsDiv = document.getElementById('clients');
-            clientsDiv.innerHTML = '';
-            const clientMap = new Map();
-
-            screenshots.forEach(s => {
-                if (!clientMap.has(s.clientId)) {
-                    clientMap.set(s.clientId, []);
+            socket.onopen = () => {
+                console.log('exam.js: WebSocket connected');
+                if (!currentToken) {
+                    socket.send(JSON.stringify({ role: 'exam' }));
                 }
-                clientMap.get(s.clientId).push(s);
-            });
+            };
 
-            clientMap.forEach((screenshots, clientId) => {
-                console.log('exam.html: Creating client section for:', clientId);
-                const clientSection = document.createElement('div');
-                clientSection.className = 'client-section';
-                clientSection.dataset.clientId = clientId;
-                clientSection.innerHTML = `
-                    <div class="client-header">
-                        <button onclick="toggleQuestions(this)">Клиент ${clientId}</button>
-                    </div>
-                    <div class="questions"></div>
-                `;
-                clientsDiv.appendChild(clientSection);
+            ws.onmessage = (event) => {
+                try {
+                    const response = JSON.parse(event.data);
+                    console.log('exam.html: Received message:', response);
+
+                    if (response.type === 'verifyTokenResponse') {
+                        if (response.success) {
+                            isAuthorized = true;
+                            document.getElementById('authorized').style.display = 'block';
+                            document.getElementById('not-authorized').style.display = 'none';
+                            pendingMessages.forEach(msg => processMessage(msg));
+                            pendingMessages = [];
+                        } else {
+                            showNotAuthorized();
+                        }
+                    } else if (isAuthorized) {
+                        processMessage(response);
+                    } else {
+                        console.log('exam.html: Buffering message until authorized:', response);
+                        pendingMessages.push(response);
+                    }
+                } catch (error) {
+                    console.error('exam.html: Error parsing message:', error);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('exam.html: WebSocket error:', error);
+            };
+
+            socket.onclose = () => {
+                console.log('exam.js: WebSocket closed, attempting reconnect in 5s');
+                setTimeout(() => {
+                    socket = new WebSocket('ws://' + window.location.host);
+                    socket.onopen = () => {
+                        console.log('exam.js: WebSocket reconnected');
+                        if (currentToken) {
+                            socket.send(JSON.stringify({ type: 'verifyToken', token: currentToken }));
+                        } else {
+                            socket.send(JSON.stringify({ role: 'exam' }));
+                        }
+                    };
+                    socket.onmessage = socket.onmessage;
+                    socket.onerror = socket.onerror;
+                    socket.onclose = socket.onclose;
+                }, 5000);
+            };
+
+            function processMessage(response) {
+                console.log('exam.html: Processing message:', response);
+                if (response.type === 'initialState') {
+                    console.log('exam.html: Processing initialState:', response.screenshots);
+                    updateClients(response.screenshots);
+                } else if (response.type === 'screenshot') {
+                    console.log('exam.html: Processing screenshot:', response);
+                    addScreenshot(response.clientId, response);
+                } else if (response.type === 'answer') {
+                    updateAnswer(response.clientId, response);
+                } else if (response.type === 'clientDisconnected') {
+                    showDisconnectedMessage(response.clientId);
+                }
+            }
+
+            function showNotAuthorized() {
+                document.getElementById('not-authorized').style.display = 'block';
+                document.getElementById('authorized').style.display = 'none';
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 2000);
+            }
+
+            function logout() {
+                const token = localStorage.getItem('authToken');
+                if (token) {
+                    ws.send(JSON.stringify({ type: 'logout', token }));
+                }
+                localStorage.removeItem('authToken');
+                window.location.href = '/';
+            }
+
+            function updateClients(screenshots) {
+                console.log('exam.html: Updating clients with screenshots:', screenshots);
+                const clientsDiv = document.getElementById('clients');
+                clientsDiv.innerHTML = '';
+                const clientMap = new Map();
 
                 screenshots.forEach(s => {
-                    addScreenshot(clientId, s);
+                    if (!clientMap.has(s.clientId)) {
+                        clientMap.set(s.clientId, []);
+                    }
+                    clientMap.get(s.clientId).push(s);
                 });
-            });
-        }
 
-        function addScreenshot(clientId, data) {
-            let clientSection = Array.from(document.getElementsByClassName('client-section')).find(section => {
-                return section.dataset.clientId === clientId;
-            });
-
-            if (!clientSection) {
-                console.log(`exam.html: Creating new client section for ${clientId}`);
-                const clientsDiv = document.getElementById('clients');
-                clientSection = document.createElement('div');
-                clientSection.className = 'client-section';
-                clientSection.dataset.clientId = clientId;
-                clientSection.innerHTML = `
+                clientMap.forEach((screenshots, clientId) => {
+                    console.log('exam.html: Creating client section for:', clientId);
+                    const clientSection = document.createElement('div');
+                    clientSection.className = 'client-section';
+                    clientSection.dataset.clientId = clientId;
+                    clientSection.innerHTML = `
                     <div class="client-header">
                         <button onclick="toggleQuestions(this)">Клиент ${clientId}</button>
                     </div>
                     <div class="questions"></div>
                 `;
-                clientsDiv.appendChild(clientSection);
+                    clientsDiv.appendChild(clientSection);
+
+                    screenshots.forEach(s => {
+                        addScreenshot(clientId, s);
+                    });
+                });
             }
 
-            const questions = clientSection.querySelector('.questions');
-            const questionDiv = document.createElement('div');
-            questionDiv.className = `question ${data.answer ? '' : 'pending'}`;
-            questionDiv.dataset.questionId = data.questionId;
-            questionDiv.innerHTML = `
+            function addScreenshot(clientId, data) {
+                let clientSection = Array.from(document.getElementsByClassName('client-section')).find(section => {
+                    return section.dataset.clientId === clientId;
+                });
+
+                if (!clientSection) {
+                    console.log(`exam.html: Creating new client section for ${clientId}`);
+                    const clientsDiv = document.getElementById('clients');
+                    clientSection = document.createElement('div');
+                    clientSection.className = 'client-section';
+                    clientSection.dataset.clientId = clientId;
+                    clientSection.innerHTML = `
+                    <div class="client-header">
+                        <button onclick="toggleQuestions(this)">Клиент ${clientId}</button>
+                    </div>
+                    <div class="questions"></div>
+                `;
+                    clientsDiv.appendChild(clientSection);
+                }
+
+                const questions = clientSection.querySelector('.questions');
+                const questionDiv = document.createElement('div');
+                questionDiv.className = `question ${data.answer ? '' : 'pending'}`;
+                questionDiv.dataset.questionId = data.questionId;
+                questionDiv.innerHTML = `
                 <img src="${data.screenshot}" alt="Скриншот">
                 <div class="answer-input">
                     <input type="text" placeholder="Введите ответ" value="${data.answer || ''}">
                     <button onclick="sendAnswer('${clientId}', '${data.questionId}')">Отправить</button>
                 </div>
             `;
-            questions.appendChild(questionDiv);
-            questions.classList.add('visible');
-            console.log(`exam.html: Added screenshot for client ${clientId}, question ${data.questionId}, URL length: ${data.screenshot.length}`);
-        }
-
-        function updateAnswer(clientId, data) {
-            const questionDiv = Array.from(document.getElementsByClassName('question')).find(div => {
-                return div.dataset.questionId === data.questionId && div.closest('.client-section').dataset.clientId === clientId;
-            });
-            if (questionDiv) {
-                const input = questionDiv.querySelector('input');
-                input.value = data.answer;
-                // Убрали установку disabled
-                questionDiv.classList.remove('pending');
-                console.log(`exam.html: Updated answer for client ${clientId}, question ${data.questionId}`);
+                questions.appendChild(questionDiv);
+                questions.classList.add('visible');
+                console.log(`exam.html: Added screenshot for client ${clientId}, question ${data.questionId}, URL length: ${data.screenshot.length}`);
             }
-        }
 
-        function sendAnswer(clientId, questionId) {
-            const questionDiv = Array.from(document.getElementsByClassName('question')).find(div => {
-                return div.dataset.questionId === questionId && div.closest('.client-section').dataset.clientId === clientId;
-            });
-            if (!questionDiv) return;
+            function updateAnswer(clientId, data) {
+                const questionDiv = Array.from(document.getElementsByClassName('question')).find(div => {
+                    return div.dataset.questionId === data.questionId && div.closest('.client-section').dataset.clientId === clientId;
+                });
+                if (questionDiv) {
+                    const input = questionDiv.querySelector('input');
+                    input.value = data.answer;
+                    // Убрали установку disabled
+                    questionDiv.classList.remove('pending');
+                    console.log(`exam.html: Updated answer for client ${clientId}, question ${data.questionId}`);
+                }
+            }
 
-            const answer = questionDiv.querySelector('input').value;
-            ws.send(JSON.stringify({
-                type: 'answer',
-                clientId,
-                questionId,
-                answer,
-                answeredBy: 'admin'
-            }));
-            console.log(`exam.html: Sent answer for client ${clientId}, question ${questionId}`);
-        }
+            function sendAnswer(clientId, questionId) {
+                const questionDiv = Array.from(document.getElementsByClassName('question')).find(div => {
+                    return div.dataset.questionId === questionId && div.closest('.client-section').dataset.clientId === clientId;
+                });
+                if (!questionDiv) return;
 
-        function toggleQuestions(button) {
-            const questions = button.parentElement.nextElementSibling;
-            questions.classList.toggle('visible');
-        }
+                const answer = questionDiv.querySelector('input').value;
+                ws.send(JSON.stringify({
+                    type: 'answer',
+                    clientId,
+                    questionId,
+                    answer,
+                    answeredBy: 'admin'
+                }));
+                console.log(`exam.html: Sent answer for client ${clientId}, question ${questionId}`);
+            }
 
-        function showDisconnectedMessage(clientId) {
-            const disconnectedMessage = document.getElementById('disconnected-message');
-            disconnectedMessage.textContent = `Клиент ${clientId} отключился`;
-            disconnectedMessage.style.display = 'block';
-            setTimeout(() => {
-                disconnectedMessage.style.display = 'none';
-            }, 3000);
-        }
+            function toggleQuestions(button) {
+                const questions = button.parentElement.nextElementSibling;
+                questions.classList.toggle('visible');
+            }
+
+            function showDisconnectedMessage(clientId) {
+                const disconnectedMessage = document.getElementById('disconnected-message');
+                disconnectedMessage.textContent = `Клиент ${clientId} отключился`;
+                disconnectedMessage.style.display = 'block';
+                setTimeout(() => {
+                    disconnectedMessage.style.display = 'none';
+                }, 3000);
+            }
     </script>
 </body>
 
