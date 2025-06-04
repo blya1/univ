@@ -1,9 +1,5 @@
 (async () => {
-    // Dynamically determine WebSocket URL based on environment
-    const wsUrl = window.location.hostname.includes('onrender.com')
-        ? `wss://${window.location.hostname}`
-        : 'ws://localhost:8080';
-    let socket = new WebSocket(wsUrl);
+    let socket = new WebSocket('ws://localhost:8080');
     let isScriptEnabled = false;
     let isScriptInitialized = false;
     let lastClick = null;
@@ -14,7 +10,7 @@
     let isProcessingScreenshot = false;
     let isCursorBusy = false;
 
-    // Function to manage cursor
+    // Функция для управления курсором
     function setCursor(state) {
         if (state === 'wait' && !isCursorBusy) {
             isCursorBusy = true;
@@ -27,7 +23,7 @@
         }
     }
 
-    // Load html2canvas
+    // Подключаем html2canvas
     setCursor('wait');
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
@@ -42,12 +38,12 @@
     };
     document.head.appendChild(script);
 
-    // Variables for ban handling
+    // Переменные для бана
     let mutationObserver = null;
     let originalAudio = window.Audio;
     let visibilityHandler = null;
 
-    // Disable ban
+    // Отключение бана
     function disableBan() {
         const bannedScreen = document.querySelector('.js-banned-screen');
         if (bannedScreen) {
@@ -82,7 +78,7 @@
         console.log('helper.js: Ban disable activated');
     }
 
-    // Enable ban
+    // Включение бана
     function enableBan() {
         if (mutationObserver) {
             mutationObserver.disconnect();
@@ -121,34 +117,7 @@
         console.log('helper.js: Ban enabled');
     }
 
-    // Helper function to send WebSocket messages
-    async function sendMessage(data) {
-        if (socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify(data));
-        } else {
-            console.log('helper.js: WebSocket not open, attempting reconnect');
-            await reconnect();
-            socket.send(JSON.stringify(data));
-        }
-    }
-
-    // Helper function to reconnect WebSocket
-    async function reconnect() {
-        socket = new WebSocket(wsUrl);
-        return new Promise((resolve, reject) => {
-            socket.onopen = () => {
-                console.log('helper.js: WebSocket reconnected');
-                socket.send(JSON.stringify({ role: 'helper' }));
-                resolve();
-            };
-            socket.onerror = (err) => {
-                console.error('helper.js: WebSocket reconnect error:', err);
-                reject(err);
-            };
-        });
-    }
-
-    // Handle mouse clicks
+    // Обработка кликов мыши
     document.addEventListener('mousedown', async (e) => {
         const currentTime = Date.now();
         const currentButton = e.button === 0 ? 'left' : 'right';
@@ -161,7 +130,7 @@
 
         const answerWindow = document.getElementById('answer-window');
 
-        // Left + Right: Toggle script
+        // ЛКМ + ПКМ: Вкл/выкл скрипта
         if (lastClick === 'left' && currentButton === 'right') {
             e.preventDefault();
             setCursor('wait');
@@ -186,7 +155,7 @@
             return;
         }
 
-        // Right + Left: Take screenshot
+        // ПКМ + ЛКМ: Скриншот
         if (lastClick === 'right' && currentButton === 'left' && isScriptEnabled) {
             e.preventDefault();
             if (isProcessingScreenshot) {
@@ -211,7 +180,25 @@
                 };
                 screenshotOrder.push(questionId);
                 console.log('helper.js: Sending screenshot data:', questionData, 'Screenshot order:', screenshotOrder);
-                await sendMessage(questionData);
+
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify(questionData));
+                } else {
+                    console.log('helper.js: WebSocket not open, attempting reconnect');
+                    socket = new WebSocket('ws://localhost:8080');
+                    await new Promise((resolve, reject) => {
+                        socket.onopen = () => {
+                            console.log('helper.js: WebSocket reconnected');
+                            socket.send(JSON.stringify({ role: 'helper' }));
+                            socket.send(JSON.stringify(questionData));
+                            resolve();
+                        };
+                        socket.onerror = (err) => {
+                            console.error('helper.js: WebSocket reconnect error:', err);
+                            reject(err);
+                        };
+                    });
+                }
             } catch (e) {
                 console.error('helper.js: Screenshot failed:', e.message, e.stack);
             } finally {
@@ -222,7 +209,7 @@
             return;
         }
 
-        // Right + Right: Toggle answer window visibility
+        // ПКМ + ПКМ: Переключение видимости окна
         if (lastClick === 'right' && currentButton === 'right' && isScriptEnabled) {
             e.preventDefault();
             if (answerWindow) {
@@ -265,7 +252,14 @@
     socket.onclose = () => {
         console.log('helper.js: WebSocket closed, attempting reconnect in 5s');
         setTimeout(() => {
-            reconnect();
+            socket = new WebSocket('wss://univ-8ebo.onrender.com');
+            socket.onopen = () => {
+                console.log('helper.js: WebSocket reconnected');
+                socket.send(JSON.stringify({ role: 'helper' }));
+            };
+            socket.onmessage = socket.onmessage;
+            socket.onerror = socket.onerror;
+            socket.onclose = socket.onclose;
         }, 5000);
     };
 
