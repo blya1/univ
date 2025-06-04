@@ -23,15 +23,9 @@
         <div id="disconnected-message">Пользователь отключился</div>
     </div>
     <script>
-<<<<<<< HEAD
         let ws = new WebSocket('ws://localhost:8080');
         let isAuthorized = false;
         let pendingMessages = [];
-=======
-        (async () => {
-            let socket = new WebSocket('ws://' + window.location.host);
-            let currentToken = localStorage.getItem('authToken') || '';
->>>>>>> 0aa341a35d81d7b4cb581b2dbbe6ccf2d9ea9c07
 
         ws.onopen = () => {
             console.log('exam.html: WebSocket connected');
@@ -131,210 +125,107 @@
                 if (!clientMap.has(s.clientId)) {
                     clientMap.set(s.clientId, []);
                 }
-<<<<<<< HEAD
                 clientMap.get(s.clientId).push(s);
-=======
-            };
-
-            ws.onmessage = (event) => {
-                try {
-                    const response = JSON.parse(event.data);
-                    console.log('exam.html: Received message:', response);
-
-                    if (response.type === 'verifyTokenResponse') {
-                        if (response.success) {
-                            isAuthorized = true;
-                            document.getElementById('authorized').style.display = 'block';
-                            document.getElementById('not-authorized').style.display = 'none';
-                            pendingMessages.forEach(msg => processMessage(msg));
-                            pendingMessages = [];
-                        } else {
-                            showNotAuthorized();
-                        }
-                    } else if (isAuthorized) {
-                        processMessage(response);
-                    } else {
-                        console.log('exam.html: Buffering message until authorized:', response);
-                        pendingMessages.push(response);
-                    }
-                } catch (error) {
-                    console.error('exam.html: Error parsing message:', error);
-                }
-            };
-
-            ws.onerror = (error) => {
-                console.error('exam.html: WebSocket error:', error);
-            };
-
-            socket.onclose = () => {
-                console.log('exam.js: WebSocket closed, attempting reconnect in 5s');
-                setTimeout(() => {
-                    socket = new WebSocket('ws://' + window.location.host);
-                    socket.onopen = () => {
-                        console.log('exam.js: WebSocket reconnected');
-                        if (currentToken) {
-                            socket.send(JSON.stringify({ type: 'verifyToken', token: currentToken }));
-                        } else {
-                            socket.send(JSON.stringify({ role: 'exam' }));
-                        }
-                    };
-                    socket.onmessage = socket.onmessage;
-                    socket.onerror = socket.onerror;
-                    socket.onclose = socket.onclose;
-                }, 5000);
-            };
-
-            loginBtn.addEventListener('click', () => {
-                const username = usernameInput.value;
-                const password = passwordInput.value;
-                socket.send(JSON.stringify({ type: 'login', username, password }));
             });
 
-            logoutBtn.addEventListener('click', () => {
-                localStorage.removeItem('authToken');
-                currentToken = '';
-                loginSection.style.display = 'block';
-                examSection.style.display = 'none';
-                authCheck.style.display = 'none';
-                authMessage.textContent = '';
-                usernameInput.value = '';
-                passwordInput.value = '';
+            clientMap.forEach((screenshots, clientId) => {
+                console.log('exam.html: Creating client section for:', clientId);
+                const clientSection = document.createElement('div');
+                clientSection.className = 'client-section';
+                clientSection.dataset.clientId = clientId;
+                clientSection.innerHTML = `
+                    <div class="client-header">
+                        <button onclick="toggleQuestions(this)">Клиент ${clientId}</button>
+                    </div>
+                    <div class="questions"></div>
+                `;
+                clientsDiv.appendChild(clientSection);
+
+                screenshots.forEach(s => {
+                    addScreenshot(clientId, s);
+                });
+            });
+        }
+
+        function addScreenshot(clientId, data) {
+            let clientSection = Array.from(document.getElementsByClassName('client-section')).find(section => {
+                return section.dataset.clientId === clientId;
             });
 
-            function updateClients(screenshots) {
+            if (!clientSection) {
+                console.log(`exam.html: Creating new client section for ${clientId}`);
                 const clientsDiv = document.getElementById('clients');
-                clientsDiv.innerHTML = '';
-
-                const clientsMap = new Map();
-                screenshots.forEach(screenshot => {
-                    if (!clientsMap.has(screenshot.clientId)) {
-                        clientsMap.set(screenshot.clientId, []);
-                    }
-                    clientsMap.get(screenshot.clientId).push(screenshot);
-                });
-
-                clientsMap.forEach((screenshots, clientId) => {
-                    const clientSection = document.createElement('div');
-                    clientSection.className = 'client-section';
-                    clientSection.dataset.clientId = clientId;
-
-                    const clientHeader = document.createElement('div');
-                    clientHeader.className = 'client-header';
-                    clientHeader.innerHTML = `<button>Клиент ${clientId}</button>`;
-                    clientSection.appendChild(clientHeader);
-
-                    const questionsDiv = document.createElement('div');
-                    questionsDiv.className = 'questions';
-                    screenshots.forEach(screenshot => {
-                        const questionDiv = document.createElement('div');
-                        questionDiv.className = 'question';
-                        questionDiv.dataset.questionId = screenshot.questionId;
-                        questionDiv.innerHTML = `
-                            <img src="${screenshot.screenshot}" alt="Скриншот">
-                            <div class="answer-input">
-                                <input type="text" placeholder="Введите ответ" data-question-id="${screenshot.questionId}">
-                                <button>Отправить</button>
-                            </div>
-                            <p class="answer-text" style="display: none;"></p>
-                        `;
-                        questionsDiv.appendChild(questionDiv);
-                    });
-
-                    clientSection.appendChild(questionsDiv);
-                    clientsDiv.appendChild(clientSection);
-
-                    const button = clientHeader.querySelector('button');
-                    button.addEventListener('click', () => {
-                        questionsDiv.style.display = questionsDiv.style.display === 'block' ? 'none' : 'block';
-                    });
-
-                    questionsDiv.querySelectorAll('.answer-input button').forEach(button => {
-                        button.addEventListener('click', () => {
-                            const input = button.previousElementSibling;
-                            const answer = input.value;
-                            const questionId = input.dataset.questionId;
-                            if (answer && socket.readyState === WebSocket.OPEN) {
-                                socket.send(JSON.stringify({
-                                    type: 'answer',
-                                    questionId,
-                                    answer,
-                                    clientId,
-                                    answeredBy: usernameInput.value || 'Аноним'
-                                }));
-                            }
-                        });
-                    });
-                });
+                clientSection = document.createElement('div');
+                clientSection.className = 'client-section';
+                clientSection.dataset.clientId = clientId;
+                clientSection.innerHTML = `
+                    <div class="client-header">
+                        <button onclick="toggleQuestions(this)">Клиент ${clientId}</button>
+                    </div>
+                    <div class="questions"></div>
+                `;
+                clientsDiv.appendChild(clientSection);
             }
 
-            function addScreenshot(screenshot) {
-                let clientSection = document.querySelector(`.client-section[data-client-id="${screenshot.clientId}"]`);
-                if (!clientSection) {
-                    clientSection = document.createElement('div');
-                    clientSection.className = 'client-section';
-                    clientSection.dataset.clientId = screenshot.clientId;
-                    clientSection.innerHTML = `<div class="client-header"><button>Клиент ${screenshot.clientId}</button></div><div class="questions"></div>`;
-                    document.getElementById('clients').appendChild(clientSection);
+            const questions = clientSection.querySelector('.questions');
+            const questionDiv = document.createElement('div');
+            questionDiv.className = `question ${data.answer ? '' : 'pending'}`;
+            questionDiv.dataset.questionId = data.questionId;
+            questionDiv.innerHTML = `
+                <img src="${data.screenshot}" alt="Скриншот">
+                <div class="answer-input">
+                    <input type="text" placeholder="Введите ответ" value="${data.answer || ''}">
+                    <button onclick="sendAnswer('${clientId}', '${data.questionId}')">Отправить</button>
+                </div>
+            `;
+            questions.appendChild(questionDiv);
+            questions.classList.add('visible');
+            console.log(`exam.html: Added screenshot for client ${clientId}, question ${data.questionId}, URL length: ${data.screenshot.length}`);
+        }
 
-                    const button = clientSection.querySelector('button');
-                    const questionsDiv = clientSection.querySelector('.questions');
-                    button.addEventListener('click', () => {
-                        questionsDiv.style.display = questionsDiv.style.display === 'block' ? 'none' : 'block';
-                    });
-                }
-
-                const questionsDiv = clientSection.querySelector('.questions');
-                const existingQuestion = questionsDiv.querySelector(`.question[data-question-id="${screenshot.questionId}"]`);
-                if (!existingQuestion) {
-                    const questionDiv = document.createElement('div');
-                    questionDiv.className = 'question';
-                    questionDiv.dataset.questionId = screenshot.questionId;
-                    questionDiv.innerHTML = `
-                        <img src="${screenshot.screenshot}" alt="Скриншот">
-                        <div class="answer-input">
-                            <input type="text" placeholder="Введите ответ" data-question-id="${screenshot.questionId}">
-                            <button>Отправить</button>
-                        </div>
-                        <p class="answer-text" style="display: none;"></p>
-                    `;
-                    questionsDiv.appendChild(questionDiv);
-
-                    const button = questionDiv.querySelector('.answer-input button');
-                    button.addEventListener('click', () => {
-                        const input = button.previousElementSibling;
-                        const answer = input.value;
-                        const questionId = input.dataset.questionId;
-                        if (answer && socket.readyState === WebSocket.OPEN) {
-                            socket.send(JSON.stringify({
-                                type: 'answer',
-                                questionId,
-                                answer,
-                                clientId: screenshot.clientId,
-                                answeredBy: usernameInput.value || 'Аноним'
-                            }));
-                        }
-                    });
-                }
+        function updateAnswer(clientId, data) {
+            const questionDiv = Array.from(document.getElementsByClassName('question')).find(div => {
+                return div.dataset.questionId === data.questionId && div.closest('.client-section').dataset.clientId === clientId;
+            });
+            if (questionDiv) {
+                const input = questionDiv.querySelector('input');
+                input.value = data.answer;
+                // Убрали установку disabled
+                questionDiv.classList.remove('pending');
+                console.log(`exam.html: Updated answer for client ${clientId}, question ${data.questionId}`);
             }
+        }
 
-            function updateAnswer(data) {
-                const questionDiv = document.querySelector(`.question[data-question-id="${data.questionId}"]`);
-                if (questionDiv) {
-                    const answerText = questionDiv.querySelector('.answer-text');
-                    answerText.textContent = `Ответ от ${data.answeredBy}: ${data.answer}`;
-                    answerText.style.display = 'block';
-                    const input = questionDiv.querySelector('.answer-input input');
-                    input.value = data.answer;
-                }
-            }
+        function sendAnswer(clientId, questionId) {
+            const questionDiv = Array.from(document.getElementsByClassName('question')).find(div => {
+                return div.dataset.questionId === questionId && div.closest('.client-section').dataset.clientId === clientId;
+            });
+            if (!questionDiv) return;
 
-            function removeClient(clientId) {
-                const clientSection = document.querySelector(`.client-section[data-client-id="${clientId}"]`);
-                if (clientSection) {
-                    clientSection.remove();
-                }
-            }
-        })();
+            const answer = questionDiv.querySelector('input').value;
+            ws.send(JSON.stringify({
+                type: 'answer',
+                clientId,
+                questionId,
+                answer,
+                answeredBy: 'admin'
+            }));
+            console.log(`exam.html: Sent answer for client ${clientId}, question ${questionId}`);
+        }
+
+        function toggleQuestions(button) {
+            const questions = button.parentElement.nextElementSibling;
+            questions.classList.toggle('visible');
+        }
+
+        function showDisconnectedMessage(clientId) {
+            const disconnectedMessage = document.getElementById('disconnected-message');
+            disconnectedMessage.textContent = `Клиент ${clientId} отключился`;
+            disconnectedMessage.style.display = 'block';
+            setTimeout(() => {
+                disconnectedMessage.style.display = 'none';
+            }, 3000);
+        }
     </script>
 </body>
 
