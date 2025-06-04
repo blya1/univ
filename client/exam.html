@@ -23,7 +23,7 @@
         <div id="disconnected-message">Пользователь отключился</div>
     </div>
     <script>
-        let ws = new WebSocket('ws://localhost:8080');
+        let ws = new WebSocket('ws://univ-8ebo.onrender.com');
         let isAuthorized = false;
         let pendingMessages = [];
 
@@ -71,7 +71,7 @@
         ws.onclose = () => {
             console.log('exam.html: WebSocket closed, attempting reconnect in 5s');
             setTimeout(() => {
-                ws = new WebSocket('ws://localhost:8080');
+                ws = new WebSocket('ws://univ-8ebo.onrender.com');
                 ws.onopen = () => {
                     console.log('exam.html: WebSocket reconnected');
                     const token = localStorage.getItem('authToken');
